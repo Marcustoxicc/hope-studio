@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Car Meet Overlay</title>
+<style>
+/* OBS Browser Source: 1920x1080 (or 1080x1920 for vertical: it adapts). Transparent background. */
+html,body{margin:0;background:transparent;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;width:100vw;height:100vh}
+.panel{position:absolute;background:linear-gradient(160deg,#0b0f1ddd,#141b33dd);border:2px solid #ffb54788;border-radius:1.6vmin;box-shadow:0 1vmin 4vmin #0008;padding:1.6vmin 2vmin;transition:opacity .5s,transform .5s}
+.hide{opacity:0;transform:translateY(2vmin)}
+#board{top:3vmin;right:3vmin;width:min(30vw,52vh)}
+.title{font-weight:900;font-size:2.4vmin;letter-spacing:.06em;text-transform:uppercase;color:#ffb547}
+.theme{font-size:1.7vmin;color:#c9d2f0;margin-bottom:1vmin}
+.row{display:flex;justify-content:space-between;align-items:center;font-size:2.2vmin;padding:.6vmin 0;border-top:1px solid #ffffff1a}
+.row .who{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%}.row .who small{color:#aab4d6;font-size:1.6vmin}
+.row b{color:#ffb547;font-variant-numeric:tabular-nums}
+#stage{left:3vmin;bottom:4vmin;width:min(42vw,70vh)}
+.stage-l{font-size:1.6vmin;color:#ff4fa3;font-weight:900;letter-spacing:.12em}
+.stage-p{font-size:4vmin;font-weight:900;line-height:1.1}.stage-c{font-size:2.4vmin;color:#c9d2f0}
+.cats{display:grid;grid-template-columns:repeat(auto-fit,minmax(14vmin,1fr));gap:.8vmin;margin-top:1.2vmin}
+.cat{background:#ffffff10;border-radius:1vmin;padding:.8vmin 1vmin;font-size:1.5vmin;color:#c9d2f0}.cat b{display:block;font-size:2.6vmin;color:#fff}
+.tot{position:absolute;right:2vmin;top:1.6vmin;font-size:5vmin;font-weight:900;color:#ffb547}
+#win{left:50%;top:50%;transform:translate(-50%,-50%) scale(1);text-align:center;padding:4vmin 6vmin;border-color:#ffb547;min-width:50vmin}
+#win.hide{transform:translate(-50%,-50%) scale(.85)}
+.trophy{font-size:12vmin;animation:pop 1.2s ease-out}
+.wl{font-size:2.4vmin;letter-spacing:.3em;color:#ffb547;font-weight:900}.wp{font-size:7vmin;font-weight:900}.wc{font-size:3vmin;color:#c9d2f0}.ws{font-size:3.4vmin;color:#ffb547;font-weight:900;margin-top:1vmin}
+@keyframes pop{0%{transform:scale(.2) rotate(-20deg);opacity:0}60%{transform:scale(1.2) rotate(6deg);opacity:1}100%{transform:scale(1)}}
+.conf{position:absolute;top:-4vmin;width:1.2vmin;height:2vmin;border-radius:.3vmin;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+#pit{right:3vmin;bottom:4vmin;width:min(30vw,52vh);border-color:#ff4fa388}
+.pl{font-size:1.6vmin;color:#ff4fa3;font-weight:900;letter-spacing:.12em;display:flex;justify-content:space-between}
+.pt{font-size:3.2vmin;font-weight:900;line-height:1.15;margin-top:.4vmin}.pr{font-size:1.8vmin;color:#c9d2f0}
+.pv{font-size:2vmin;margin-top:.6vmin}.pv b{color:#ffb547}
+.ptimer{font-size:4.4vmin;font-weight:900;color:#ff4fa3;font-variant-numeric:tabular-nums}
+.pq{font-size:1.8vmin;color:#c9d2f0;border-top:1px solid #ffffff1a;margin-top:1vmin;padding-top:.8vmin}
+.pq div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcta{font-size:2vmin;font-weight:800}
+#hall{left:50%;top:50%;transform:translate(-50%,-50%);min-width:56vmin;border-color:#ffb547;text-align:left}
+#hall.hide{transform:translate(-50%,-46%)}
+.hl{font-size:2.2vmin;letter-spacing:.3em;color:#ffb547;font-weight:900;text-align:center;margin-bottom:1vmin}
+.hrow{display:flex;justify-content:space-between;gap:3vmin;font-size:2.8vmin;padding:.8vmin 0;border-top:1px solid #ffffff1a}.hrow small{color:#aab4d6;font-size:1.8vmin}.hrow b{color:#ffb547}
+#pflash{left:50%;top:12vh;transform:translateX(-50%);font-size:3.6vmin;font-weight:900;padding:2vmin 4vmin;border-color:#3ddc97;white-space:nowrap}
+#pflash.failed{border-color:#ff5d6c}
+@media (max-aspect-ratio:1/1){ #pit{right:3vmin;bottom:auto;top:40vh;width:46vw} }
+@media (max-aspect-ratio:1/1){ #board{top:auto;bottom:30vh;right:3vmin;width:46vw} #stage{left:3vmin;bottom:auto;top:14vh;width:calc(100vw - 6vmin)} }
+</style>
+</head>
+<body>
+<div id="board" class="panel hide"></div>
+<div id="stage" class="panel hide"></div>
+<div id="win" class="panel hide"></div>
+<div id="pit" class="panel hide"></div>
+<div id="hall" class="panel hide"></div>
+<div id="pflash" class="panel hide"></div>
+<script>
+const T=new URLSearchParams(location.search).get('t');let lastWin='';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const el=id=>document.getElementById(id);
+function show(id,on){el(id).classList.toggle('hide',!on)}
+function confetti(){const cols=['#ffb547','#ff4fa3','#4fc3ff','#3ddc97','#fff'];for(let i=0;i<120;i++){const d=document.createElement('div');d.className='conf';d.style.left=Math.random()*100+'vw';d.style.background=cols[i%cols.length];d.style.animationDuration=(2.5+Math.random()*2.5)+'s';d.style.animationDelay=(Math.random()*.8)+'s';document.body.appendChild(d);setTimeout(()=>d.remove(),6000)}}
+function draw(m){
+ if(!m){show('board',0);show('stage',0);show('win',0);return}
+ el('board').innerHTML=`<div class="title">🏁 ${esc(m.title)}</div><div class="theme">${esc(m.game)}${m.theme?' · '+esc(m.theme):''}</div>`+
+  (m.ranked.slice(0,5).map((e,i)=>`<div class="row"><span class="who">${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${esc(e.player)} <small>${esc(e.car)}</small></span><b>${e.total.toFixed(1)}</b></div>`).join('')||'<div class="row"><span class="who">Judging starts soon…</span></div>');
+ show('board',!m.reveal);
+ const s=m.entries.find(e=>e.id===m.stage);
+ if(s&&!m.reveal){el('stage').innerHTML=`<div class="stage-l">ON STAGE</div><div class="stage-p">${esc(s.player)}</div><div class="stage-c">${esc(s.car)}</div><div class="tot">${s.total===null?'':s.total.toFixed(1)}</div>
+  <div class="cats">${m.cats.map(c=>`<div class="cat">${esc(c.name)}<b>${s.scores[c.key]??'–'}</b></div>`).join('')}</div>`;show('stage',1)}else show('stage',0);
+ if(m.reveal&&m.winner){const k=m.winner.player+m.winner.car+m.winner.total;el('win').innerHTML=`<div class="trophy">🏆</div><div class="wl">WINNER</div><div class="wp">${esc(m.winner.player)}</div><div class="wc">${esc(m.winner.car)}</div><div class="ws">${Number(m.winner.total).toFixed(2)} / 10</div>`;show('win',1);if(k!==lastWin){lastWin=k;confetti()}}
+ else{show('win',0);lastWin=''}
+}
+let P=null,skew=0;
+function drawHall(h,m){const busy=m&&(m.reveal||m.stage);if(!h||!h.on||!h.champs.length||busy){show('hall',0);return}
+ el('hall').innerHTML=`<div class="hl">🏆 CAR MEET HALL OF FAME</div>${h.champs.slice(0,5).map((c,i)=>`<div class="hrow"><span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${esc(c.player)} <small>${esc(c.cars[0]||'')}</small></span><b>${c.wins} win${c.wins>1?'s':''}</b></div>`).join('')}`;show('hall',1)}
+const fmt=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+function drawPit(p){P=p;
+ const meetBig=document.querySelector('#win:not(.hide)');
+ if(!p||(!p.open&&!p.active)||meetBig){show('pit',0)}
+ else{const a=p.active;
+  el('pit').innerHTML=(a?`<div class="pl"><span>🎟️ PIT PASS</span><span class="ptimer" id="pt">${fmt(a.ends-(Date.now()-skew))}</span></div><div class="pt">${esc(a.title)}</div><div class="pr">${esc(a.rule)}</div><div class="pv">for <b>${esc(a.viewer)}</b></div>`
+   :`<div class="pl"><span>🎟️ PIT PASS OPEN</span></div><div class="pcta">Drop a car / route / challenge in chat!</div>`)+
+   (p.queue.length?`<div class="pq">${p.queue.slice(0,3).map((q,i)=>`<div>${i+1}. ${esc(q.viewer)}: ${esc(q.title)}</div>`).join('')}${p.queue.length>3?`<div>+${p.queue.length-3} more</div>`:''}</div>`:'');
+  show('pit',1)}
+ const f=p&&p.flash;if(f&&Date.now()-skew-f.at<6000){el('pflash').textContent=f.text;el('pflash').className='panel '+(f.kind==='failed'?'failed':'');if((f.kind==='done'||f.kind==='shout')&&el('pflash').dataset.k!=String(f.at)){el('pflash').dataset.k=f.at;confetti()}}else show('pflash',0);
+}
+setInterval(()=>{const t=el('pt');if(t&&P&&P.active)t.textContent=fmt(P.active.ends-(Date.now()-skew))},250);
+function connect(){const ws=new WebSocket(`ws://${location.host}/?t=${encodeURIComponent(T)}`);ws.onmessage=e=>{const d=JSON.parse(e.data);skew=Date.now()-d.now;draw(d.meet);drawPit(d.pit);drawHall(d.hall,d.meet)};ws.onclose=()=>setTimeout(connect,2000)}
+connect();
+</script>
+</body>
+</html>

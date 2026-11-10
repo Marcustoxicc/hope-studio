@@ -1,0 +1,9 @@
+node_modules/
+token.txt
+OBS_OVERLAY_URL.txt
+qr.png
+clips/
+clips.json
+meets.json
+pit.json
+*.tmp

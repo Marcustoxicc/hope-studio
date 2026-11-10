@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pit Pass">
+<title>Pit Pass</title>
+<style>
+:root{--bg:#07090f;--card:#121829;--line:#232c47;--txt:#eef2ff;--dim:#8d97b5;--gold:#ffb547;--blue:#4fc3ff;--good:#3ddc97;--bad:#ff5d6c;--pink:#ff4fa3}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 -apple-system,system-ui,Segoe UI,sans-serif;overflow-x:hidden}
+.wrap{max-width:720px;margin:0 auto;padding:max(14px,env(safe-area-inset-top)) 14px 40px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+h1{margin:0;font-size:21px}h1 b{color:var(--pink)}a{color:var(--blue)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+h3{margin:0 0 8px;font-size:15px}
+input,select{width:100%;min-width:0;background:#0b1022;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px;font:inherit;font-size:16px}
+button{border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:inherit;font-weight:800;cursor:pointer;background:#1b2440;color:var(--txt)}
+button.go{background:var(--pink);border:0;color:#fff}button.ok{background:var(--good);color:#04160e;border:0}button.no{background:var(--bad);border:0;color:#fff}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:0}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;max-height:260px;overflow:auto;margin-top:8px}
+.cardpick{text-align:left;padding:9px;border-radius:10px;font-weight:600;font-size:13px}
+.cardpick.sel{background:var(--pink);color:#fff;border-color:var(--pink)}
+.kind{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);display:block}
+.cardpick.sel .kind{color:#fff}
+.active{border-color:var(--pink);box-shadow:0 0 0 2px #ff4fa355}
+.big{font-size:22px;font-weight:900}.timer{font-size:44px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--pink);text-align:center}
+.q{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}.q:last-child{border:0}
+.q .t{min-width:0}.q .t b{display:block}.q .t span{font-size:12px;color:var(--dim)}
+.q button{padding:8px 10px;font-size:13px}
+.small{font-size:12px;color:var(--dim)}
+.toggle{display:flex;justify-content:space-between;align-items:center}
+.pill{font-size:12px;padding:4px 10px;border-radius:999px;font-weight:800}
+#toasts{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:9;width:min(92vw,520px)}
+.toast{background:#1d2745;border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-weight:600}
+details summary{cursor:pointer;color:var(--dim);font-size:13px;margin-top:6px}
+button:disabled{opacity:.4;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>🎟️ Pit <b>Pass</b></h1><span class="small" id="st">connecting…</span></header>
+  <div id="app"></div>
+  <p class="small"><a id="deck" href="#">← Stream deck</a> · Open to everyone, never "follow to request". Thank gifts, never trade them for spots.</p>
+</div>
+<div id="toasts"></div>
+<script>
+const T=new URLSearchParams(location.search).get('t');let S=null,ws=null,sel=null,busy=false,queued=false,lastJson='',seenToast=new Set(),skew=0;
+const $=id=>document.getElementById(id);$('deck').href='/?t='+encodeURIComponent(T);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function connect(){ws=new WebSocket(`ws://${location.host}/?t=${encodeURIComponent(T)}`);
+ ws.onopen=()=>$('st').textContent='PC connected';
+ ws.onmessage=e=>{const d=JSON.parse(e.data);skew=Date.now()-d.now;for(const t of d.toasts||[]){const k=t.at+t.t;if(!seenToast.has(k)&&Math.abs(Date.now()-skew-t.at)<6000){seenToast.add(k);toast(t.t)}}
+  const j=JSON.stringify(d.pit);if(j===lastJson)return;lastJson=j;S=d;schedule()};
+ ws.onclose=()=>{$('st').textContent='PC offline… retrying';setTimeout(connect,2000)}}
+function send(o){if(navigator.vibrate)navigator.vibrate(20);ws&&ws.readyState===1&&ws.send(JSON.stringify(o))}
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;$('toasts').appendChild(d);setTimeout(()=>d.remove(),3500)}
+document.addEventListener('focusin',()=>busy=true);document.addEventListener('focusout',()=>{busy=false;if(queued)schedule()});
+function schedule(){if(busy){queued=true;return}queued=false;const y=window.scrollY;const cs=document.querySelector('.cards')?.scrollTop||0;render();window.scrollTo(0,y);const c=document.querySelector('.cards');if(c)c.scrollTop=cs}
+const fmt=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+function render(){const p=S.pit;
+ const a=p.active;
+ $('app').innerHTML=`
+ <div class="card toggle"><span><b>Pit Pass is ${p.open?'OPEN':'CLOSED'}</b><br><span class="small">${p.queue.length}/${p.max} in queue · ${p.turnSec/60} min turns</span></span><button class="${p.open?'no':'ok'}" onclick="send({a:'pit:open',v:${!p.open}})">${p.open?'Close':'Open'}</button></div>
+ ${a?`<div class="card active"><div class="small">NOW: ${esc(a.viewer)}'s card</div><div class="big">${esc(a.title)}</div><div class="small">${esc(a.rule)}</div>
+  <div class="timer" id="tm">${fmt(a.ends-(Date.now()-skew))}</div>
+  <div class="row"><button class="ok" onclick="send({a:'pit:verdict',v:'done'})">✅ Done</button><button class="no" onclick="send({a:'pit:verdict',v:'failed'})">❌ Failed</button></div>
+  <div class="row" style="margin-top:8px"><button onclick="send({a:'pit:extend'})">+30 s</button><button onclick="send({a:'pit:verdict',v:'skipped'})">⏭ Skip</button></div></div>`
+  :`<div class="card"><button class="go" style="width:100%" ${p.queue.length?'':'disabled'} onclick="send({a:'pit:start'})">▶ Start next turn${p.queue.length?': '+esc(p.queue[0].viewer):''}</button></div>`}
+ <div class="card"><h3>➕ Add a request</h3>
+  <input id="viewer" placeholder="Viewer name (from chat)" autocomplete="off" autocapitalize="off">
+  <div class="cards">${p.cards.map(c=>`<button class="cardpick ${sel===c.id?'sel':''}" onclick="sel=sel==='${c.id}'?null:'${c.id}';schedule()"><span class="kind">${c.kind}</span>${esc(c.title)}</button>`).join('')}</div>
+  <details><summary>…or a custom card (you approve it)</summary><input id="custom" placeholder="Short challenge, e.g. 'only drive red cars'" maxlength="80" style="margin-top:6px"></details>
+  <div style="margin-top:10px"><button class="go" style="width:100%" onclick="add()">Add to queue</button></div></div>
+ <div class="card"><h3>🧾 Queue</h3>${p.queue.map((q,i)=>`<div class="q"><div class="t"><b>${i+1}. ${esc(q.viewer)}</b><span>${esc(q.title)}</span></div><div class="row" style="flex:0 0 auto">${i?`<button onclick="send({a:'pit:up',id:'${q.id}'})">▲</button>`:''}${!a?`<button onclick="send({a:'pit:start',id:'${q.id}'})">▶</button>`:''}<button onclick="send({a:'pit:remove',id:'${q.id}'})">✕</button></div></div>`).join('')||'<span class="small">Empty. Say it on stream: "drop a Pit Pass card in chat!"</span>'}</div>
+ <div class="card"><h3>📜 Last turns</h3>${p.history.map(h=>`<div class="q"><div class="t"><b>${esc(h.viewer)}</b><span>${esc(h.title)}</span></div><span>${h.result==='done'?'✅':h.result==='failed'?'❌':'⏭'}</span></div>`).join('')||'<span class="small">None yet.</span>'}
+  ${p.regulars.length?`<p class="small">Regulars (shout them out!): ${p.regulars.map(r=>esc(r.viewer)+' ×'+r.n).join(' · ')}</p>`:''}</div>
+ <div class="card"><h3>🏆 Season</h3>${p.season&&p.season.total?`<p class="small">${p.season.total} turns · ${p.season.done} done (${Math.round(p.season.done/p.season.total*100)}%)</p>
+  <div class="small" style="margin:6px 0 2px">TOP REQUESTERS (tap 📣 to shout them out on stream)</div>
+  ${p.season.top.map((t,i)=>`<div class="q"><div class="t"><b>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${esc(t.viewer)}</b><span>${t.n} turns · ${t.done} done</span></div><button data-v="${esc(t.viewer)}" onclick="send({a:'pit:shoutout',viewer:this.dataset.v})">📣</button></div>`).join('')}
+  ${p.season.week.length?`<p class="small">This week: ${p.season.week.map(w=>esc(w.viewer)+' ×'+w.n).join(' · ')}</p>`:''}
+  <div class="small" style="margin:8px 0 2px">MOST PICKED CARDS</div>${p.season.cards.map(c=>`<div class="q"><div class="t"><b>${esc(c.title)}</b><span>${c.n}× · ${c.done} done</span></div></div>`).join('')}`:'<span class="small">Your season stats start with the first finished turn.</span>'}</div>
+ <div class="card"><details><summary>⚙️ Settings + cards</summary>
+  <div class="row" style="margin-top:8px"><label class="small">Turn (sec)<input id="ts" type="number" value="${p.turnSec}"></label><label class="small">Max queue<input id="mx" type="number" value="${p.max}"></label></div>
+  <button style="width:100%;margin-top:8px" onclick="send({a:'pit:settings',turnSec:$('ts').value,max:$('mx').value})">Save settings</button>
+  <h3 style="margin-top:14px">New card</h3><div class="row"><select id="nk"><option>challenge</option><option>car</option><option>route</option></select><input id="nt" placeholder="Title"></div><input id="nr" placeholder="Rule (one line)" style="margin-top:6px">
+  <button style="width:100%;margin-top:8px" onclick="if($('nt').value.trim()){send({a:'pit:addcard',kind:$('nk').value,title:$('nt').value,rule:$('nr').value});$('nt').value='';$('nr').value=''}">Add card</button>
+  <div style="margin-top:10px">${p.cards.map(c=>`<div class="q"><div class="t"><b>${esc(c.title)}</b><span>${esc(c.kind)} · ${esc(c.rule)}</span></div><button onclick="if(confirm('Delete this card?'))send({a:'pit:delcard',id:'${c.id}'})">✕</button></div>`).join('')}</div>
+  <button style="width:100%;margin-top:8px" onclick="if(confirm('Reset to Hope\\'s 20 starter cards?'))send({a:'pit:resetcards'})">Reset to starter cards</button></details></div>`;
+}
+function add(){const v=$('viewer').value.trim(),c=$('custom')?.value.trim();if(!v){$('viewer').focus();return}if(!sel&&!c){toast('Pick a card (or type a custom one).');return}
+ send({a:'pit:request',viewer:v,card:sel,custom:sel?'':c});$('viewer').value='';if($('custom'))$('custom').value='';sel=null;document.activeElement.blur()}
+setInterval(()=>{const el=$('tm');if(el&&S?.pit?.active)el.textContent=fmt(S.pit.active.ends-(Date.now()-skew))},250);
+connect();
+</script>
+</body>
+</html>
